@@ -1,8 +1,4 @@
-import {
-  renderPdfServerFn,
-  renderPdfBase64ServerFn,
-  renderPdfBatchServerFn,
-} from "@/lib/pdfServer";
+import { renderPdfServerFn, renderPdfBatchServerFn } from "@/lib/pdfServer";
 import { auth } from "@/lib/firebase";
 
 export interface PdfOptions {
@@ -41,10 +37,7 @@ function collectAppStylesheets(): string {
 /** The exported markup carries no `<script>` tags, only the printable
  * subtree's HTML plus the app's own compiled CSS, so the server just prints
  * a static page — it never boots the SPA or touches Firestore. */
-/** Exported because the WhatsApp outbox stores this string, not the rendered
- *  PDF: it is a fraction of the size, and a queued bill has to be re-rendered
- *  at send time anyway. */
-export function buildPrintableHtml(el: HTMLElement, includeAppCss = true): string {
+function buildPrintableHtml(el: HTMLElement, includeAppCss = true): string {
   // The app's compiled stylesheet is ~108 KB and gets uploaded with EVERY
   // render request. Markup that styles itself entirely inline (the party
   // statement built for the bulk ledger export) needs none of it, so
@@ -84,24 +77,6 @@ async function elementToPdfBlob(
     },
   });
   return res.blob();
-}
-
-/** Same rendering as elementToPdfBlob, but returns base64 — for handing the
- * PDF to another server (e.g. WhatsApp send) that can't consume a Blob. */
-export async function elementToPdfBase64(
-  el: HTMLElement,
-  orientation: "portrait" | "landscape" = "landscape",
-  pageWidthMm?: number,
-): Promise<string> {
-  const { pdfBase64 } = await renderPdfBase64ServerFn({
-    data: {
-      callerIdToken: await requireIdToken(),
-      html: buildPrintableHtml(el),
-      landscape: orientation === "landscape",
-      pageWidthMm,
-    },
-  });
-  return pdfBase64;
 }
 
 function pdfFilename(name: string): string {

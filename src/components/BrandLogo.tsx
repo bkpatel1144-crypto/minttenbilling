@@ -64,6 +64,10 @@ type WordmarkProps = {
  */
 export function MinttenWordmark({ size = "sm", tagline = false, className }: WordmarkProps) {
   const px = typeof size === "number" ? size : SIZES[size];
+  // The strapline never goes below 8px, or the wide tracking turns it into
+  // noise; the leading block is then sized off IT, not off the wordmark, so
+  // the block always matches the height of the letters beside it.
+  const tag = Math.max(8, Math.round(px * 0.42));
 
   return (
     // role + aria-label, because the word is spelled with a DOTLESS i (see
@@ -81,12 +85,12 @@ export function MinttenWordmark({ size = "sm", tagline = false, className }: Wor
           fontSize: px,
           fontWeight: 800,
           letterSpacing: "-0.025em",
-          // 1.3, not the tighter 1.1 this shell uses elsewhere: the leaf is
-          // lifted a little above the "i" and the extra half-leading keeps it
-          // INSIDE the line box. Several call sites (the sidebar brand block)
-          // sit in an overflow-hidden container, which would otherwise shave
-          // the tip off the leaf.
-          lineHeight: 1.3,
+          // 1.6, not the tighter 1.1 this shell uses elsewhere: the leaf
+          // stands well clear above the "i", and that half-leading is what
+          // keeps it INSIDE the line box. Several call sites (the sidebar
+          // brand block) sit in an overflow-hidden container, which would
+          // otherwise shave the tip off the leaf.
+          lineHeight: 1.6,
           whiteSpace: "nowrap",
         }}
       >
@@ -97,10 +101,10 @@ export function MinttenWordmark({ size = "sm", tagline = false, className }: Wor
             style={{
               position: "absolute",
               left: "50%",
-              top: "-0.14em",
-              width: "0.3em",
-              height: "0.3em",
-              transform: "translateX(-44%)",
+              top: "-0.3em",
+              width: "0.42em",
+              height: "0.42em",
+              transform: "translateX(-46%)",
             }}
           />
         </span>
@@ -112,8 +116,8 @@ export function MinttenWordmark({ size = "sm", tagline = false, className }: Wor
           style={{
             display: "inline-flex",
             alignItems: "center",
-            gap: px * 0.22,
-            fontSize: Math.max(8, Math.round(px * 0.42)),
+            gap: tag * 0.45,
+            fontSize: tag,
             fontWeight: 600,
             letterSpacing: "0.26em",
             lineHeight: 1.4,
@@ -124,9 +128,9 @@ export function MinttenWordmark({ size = "sm", tagline = false, className }: Wor
           <span
             style={{
               display: "inline-block",
-              width: px * 0.34,
-              height: px * 0.16,
-              borderRadius: px * 0.05,
+              width: tag,
+              height: tag * 0.62,
+              borderRadius: tag * 0.18,
               background: "currentColor",
             }}
           />
