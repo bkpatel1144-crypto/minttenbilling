@@ -7,6 +7,12 @@ type RenderPdfInput = {
   html: string;
   landscape: boolean;
   pageWidthMm?: number;
+  /** Fixed page height. Only meaningful alongside pageWidthMm, and it is the
+   * difference between the two sized modes: with it the sheet is exactly
+   * this tall (6x4 label stock, which has a real bottom edge); without it
+   * the height is measured from the content (a receipt roll, cut where the
+   * bill ends). */
+  pageHeightMm?: number;
 };
 
 const LOCAL_CHROME_CANDIDATES = [
@@ -64,6 +70,7 @@ async function renderInBrowser(
   html: string,
   landscape: boolean,
   pageWidthMm?: number,
+  pageHeightMm?: number,
 ): Promise<Buffer> {
   {
     const page = await browser.newPage();
@@ -111,14 +118,24 @@ async function renderInBrowser(
         for (const sheet of Array.from(document.styleSheets)) scan(sheet);
       });
 
-      const heightPx = await page.evaluate(() => {
-        const el = document.querySelector<HTMLElement>(".print-visible, .print-area");
-        return (el ?? document.body).getBoundingClientRect().height;
-      });
-      // Small buffer only — the measurement itself is precise (verified
-      // directly against real output), a big cushion here just reintroduces
-      // the dead-space-at-the-bottom look this was meant to eliminate.
-      const heightMm = Math.ceil((heightPx * 25.4) / 96) + 2;
+      // Fixed-height stock (6x4 labels) skips the measurement entirely: the
+      // sheet is a real physical size, so a short bill must leave the rest
+      // of the label blank and a long one must run onto a second label —
+      // measuring the content would instead invent a page the printer has
+      // no paper for.
+      const heightMm =
+        pageHeightMm ??
+        (await (async () => {
+          const heightPx = await page.evaluate(() => {
+            const el = document.querySelector<HTMLElement>(".print-visible, .print-area");
+            return (el ?? document.body).getBoundingClientRect().height;
+          });
+          // Small buffer only — the measurement itself is precise (verified
+          // directly against real output), a big cushion here just
+          // reintroduces the dead-space-at-the-bottom look this was meant
+          // to eliminate.
+          return Math.ceil((heightPx * 25.4) / 96) + 2;
+        })());
       pdf = await page.pdf({
         width: `${pageWidthMm}mm`,
         height: `${heightMm}mm`,
@@ -144,8 +161,9 @@ async function renderPdfBuffer(
   html: string,
   landscape: boolean,
   pageWidthMm?: number,
+  pageHeightMm?: number,
 ): Promise<Buffer> {
-  return withBrowser((b) => renderInBrowser(b, html, landscape, pageWidthMm));
+  return withBrowser((b) => renderInBrowser(b, html, landscape, pageWidthMm, pageHeightMm));
 }
 
 const validateRenderInput = (data: unknown): RenderPdfInput => {
@@ -158,6 +176,7 @@ const validateRenderInput = (data: unknown): RenderPdfInput => {
     html: d.html,
     landscape: !!d.landscape,
     pageWidthMm: typeof d.pageWidthMm === "number" ? d.pageWidthMm : undefined,
+    pageHeightMm: typeof d.pageHeightMm === "number" ? d.pageHeightMm : undefined,
   };
 };
 
@@ -172,7 +191,12 @@ export const renderPdfServerFn = createServerFn({ method: "POST" })
     // the endpoint was an unauthenticated headless-Chromium-as-a-service
     // (SSRF via subresource fetches in attacker HTML + free compute).
     await requireActiveUser(data.callerIdToken);
-    const pdf = await renderPdfBuffer(data.html, data.landscape, data.pageWidthMm);
+    const pdf = await renderPdfBuffer(
+      data.html,
+      data.landscape,
+      data.pageWidthMm,
+      data.pageHeightMm,
+    );
     return new Response(new Blob([new Uint8Array(pdf)], { type: "application/pdf" }), {
       headers: { "Content-Type": "application/pdf" },
     });

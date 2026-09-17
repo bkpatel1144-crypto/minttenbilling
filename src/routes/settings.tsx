@@ -24,10 +24,11 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { today, fmtMoney } from "@/lib/format";
 import { APP_NAME, APP_VERSION } from "@/lib/version";
+import { PRINT_FORMATS } from "@/lib/printFormats";
 import { auth, isBrowser } from "@/lib/firebase";
 import { usePermissions } from "@/hooks/usePermissions";
 import { TeamSection } from "@/components/TeamSection";
-import type { Company } from "@/types";
+import type { Company, PrintFormat } from "@/types";
 import {
   Settings as SettingsIcon,
   Building2,
@@ -418,6 +419,30 @@ function SettingsPage() {
                     onChange={(e) => setC({ ...c, address: e.target.value })}
                   />
                 </div>
+                {/* The paper the shop's printer is actually loaded with.
+                    Every bill opens on this, and Save & Print sends this to
+                    the printer without asking — so it is set once here,
+                    rather than being whatever format someone last happened
+                    to tap while reprinting an old bill. */}
+                <label className="block sm:col-span-2">
+                  <span className="text-[13px] font-medium text-gray-700">
+                    Default print format for sale invoices
+                  </span>
+                  <select
+                    value={c.printFormat ?? "a4"}
+                    onChange={(e) => setC({ ...c, printFormat: e.target.value as PrintFormat })}
+                    className="mt-1.5 w-full h-9 px-2.5 border border-gray-200 rounded-md bg-white text-[13px] focus:border-primary focus:ring-2 focus:ring-ring/20 outline-none transition"
+                  >
+                    {PRINT_FORMATS.map((f) => (
+                      <option key={f.value} value={f.value}>
+                        {f.label}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="mt-1 block text-[11px] text-gray-400">
+                    {PRINT_FORMATS.find((f) => f.value === (c.printFormat ?? "a4"))?.hint}
+                  </span>
+                </label>
                 <div className="sm:col-span-2 space-y-2 pt-1">
                   <ToggleRow
                     checked={c.enableRoundOff !== false}

@@ -258,7 +258,7 @@ export interface Return {
   createdAt: string;
 }
 
-export type PrintFormat = "a4" | "a4-2up" | "thermal80" | "thermal58";
+export type PrintFormat = "a4" | "a4-2up" | "6x4" | "thermal80" | "thermal58";
 
 export interface Company {
   name: string;
@@ -277,7 +277,9 @@ export interface Company {
    * lagging behind). When turned off, such saves are blocked with an error
    * instead of just a warning. */
   allowNegativeStock?: boolean;
-  /** Preferred print format, remembered from the invoice page */
+  /** Default print format for bills — set in Settings, and what a bill
+   * opens on. The invoice page can switch format for the bill in front of
+   * you without changing this. */
   printFormat?: PrintFormat;
   /** Set once the owner has finished checking existing opening balances
    * (Settings -> Opening Balance Review) and hidden that tool. Purely a UI

@@ -9,9 +9,11 @@ import { printWithName, printOrEscapeStandalone, isStandalone } from "@/lib/prin
 import { downloadElementAsPdf } from "@/lib/pdf";
 import { useShareablePdf } from "@/hooks/useShareablePdf";
 import { useFitScale } from "@/hooks/useFitScale";
+import { PRINT_FORMATS, sheetSizeMm, isLandscape } from "@/lib/printFormats";
 import { fmtMode } from "@/lib/paymentMode";
 import { ThermalReceipt } from "@/components/ThermalReceipt";
 import { PrintableInvoice } from "@/components/PrintableInvoice";
+import { PrintableInvoice6x4, SHEET_6X4_W, SHEET_6X4_H } from "@/components/PrintableInvoice6x4";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useRepoData } from "@/hooks/useRepoData";
 import { toast } from "sonner";
@@ -40,13 +42,6 @@ export const Route = createFileRoute("/sales/$id")({
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
-const FORMATS: { value: PrintFormat; label: string }[] = [
-  { value: "a4", label: "A4" },
-  { value: "a4-2up", label: "2 Copies" },
-  { value: "thermal80", label: "80mm" },
-  { value: "thermal58", label: "58mm" },
-];
-
 // Native pixel size of each printable sheet — the preview scales down to fit
 // whatever width it's actually given (see useFitScale) instead of forcing
 // horizontal scroll/pan on a phone, which reads as a broken layout (content
@@ -69,7 +64,8 @@ function InvoiceDetailPage() {
   const [fmt, setFmt] = useState<PrintFormat>("a4");
   const [pdfBusy, setPdfBusy] = useState<"download" | "share" | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
-  const previewNativeWidth = fmt === "a4-2up" ? A4_2UP_W : fmt === "a4" ? A4_W : null;
+  const previewNativeWidth =
+    fmt === "a4-2up" ? A4_2UP_W : fmt === "a4" ? A4_W : fmt === "6x4" ? SHEET_6X4_W : null;
   const { containerRef: previewRef, scale: fitScale } = useFitScale(previewNativeWidth ?? 1);
   const previewScale = previewNativeWidth ? fitScale : 1;
 
@@ -95,14 +91,19 @@ function InvoiceDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [print, inv]);
 
-  const changeFormat = (f: PrintFormat) => {
-    setFmt(f);
-    if (co) CompanyRepo.save({ ...co, printFormat: f }); // remember for next time
-  };
+  // Switches the format for the bill in front of you only. It used to write
+  // the choice back as the company default, which meant reprinting one old
+  // bill on 58mm silently re-pointed every future Save & Print at the
+  // receipt roll. The default now lives in Settings, where changing it is
+  // deliberate.
+  const changeFormat = (f: PrintFormat) => setFmt(f);
 
-  // Thermal receipts need an explicit page width passed to the PDF
-  // renderer — see renderPdfServerFn for how the width is applied.
-  const thermalWidthMm = fmt === "thermal80" ? 80 : fmt === "thermal58" ? 58 : undefined;
+  // Anything that is not a plain A4 sheet needs its paper size passed to
+  // the PDF renderer explicitly — see renderPdfServerFn for why the CSS
+  // @page rule alone is not enough. A receipt roll sends only a width (the
+  // roll is cut where the bill ends); the 6x4 label sends both, because it
+  // has a real bottom edge.
+  const { width: sheetWidthMm, height: sheetHeightMm } = sheetSizeMm(fmt);
 
   const { shareReady, share, resetShare } = useShareablePdf("Invoice");
 
@@ -114,8 +115,9 @@ function InvoiceDetailPage() {
       await downloadElementAsPdf(
         printRef.current,
         inv.number,
-        fmt === "a4-2up" ? "landscape" : "portrait",
-        thermalWidthMm,
+        isLandscape(fmt) ? "landscape" : "portrait",
+        sheetWidthMm,
+        { pageHeightMm: sheetHeightMm },
       );
       toast.success("Invoice downloaded as PDF");
     } catch {
@@ -132,8 +134,9 @@ function InvoiceDetailPage() {
       await share(
         printRef.current,
         inv.number,
-        fmt === "a4-2up" ? "landscape" : "portrait",
-        thermalWidthMm,
+        isLandscape(fmt) ? "landscape" : "portrait",
+        sheetWidthMm,
+        { pageHeightMm: sheetHeightMm },
       );
     } catch {
       toast.error("Could not share invoice — try Download PDF instead");
@@ -198,7 +201,7 @@ function InvoiceDetailPage() {
               option sharing the width evenly, instead of a shrink-wrapped
               pill squeezed in next to every other button. */}
           <div className="flex items-center rounded-md border border-gray-200 overflow-hidden h-8 w-full sm:w-auto">
-            {FORMATS.map((f) => (
+            {PRINT_FORMATS.map((f) => (
               <button
                 key={f.value}
                 onClick={() => changeFormat(f.value)}
@@ -260,6 +263,27 @@ function InvoiceDetailPage() {
         {(fmt === "thermal80" || fmt === "thermal58") && co ? (
           <div ref={printRef} className="bg-white shadow-lg p-5 h-fit rounded-sm">
             <ThermalReceipt inv={inv} company={co} width={fmt === "thermal80" ? 80 : 58} />
+          </div>
+        ) : fmt === "6x4" && co ? (
+          <div
+            className="shrink-0"
+            style={{ width: SHEET_6X4_W * previewScale, height: SHEET_6X4_H * previewScale }}
+          >
+            <div
+              ref={printRef}
+              className="preview-fit-scale bg-white shadow-lg print:shadow-none print:m-0"
+              style={{
+                width: SHEET_6X4_W,
+                minHeight: SHEET_6X4_H,
+                // 4mm at 96dpi — the same margin the sheet's own @page rule
+                // gives the printer, so what is on screen is the real sheet.
+                padding: 15,
+                transform: `scale(${previewScale})`,
+                transformOrigin: "top left",
+              }}
+            >
+              <PrintableInvoice6x4 inv={inv} company={co} mode="sale" className="print-visible" />
+            </div>
           </div>
         ) : fmt === "a4-2up" && co ? (
           <div

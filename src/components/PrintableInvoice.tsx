@@ -1,5 +1,6 @@
 import type { Invoice, Company } from "@/types";
 import { fmtMoney, fmtDate } from "@/lib/format";
+import { amountInWords, invoicePrintTotals } from "@/lib/invoicePrint";
 import { describePayment } from "@/lib/paymentSplit";
 import { fmtMode } from "@/lib/paymentMode";
 
@@ -24,61 +25,6 @@ interface Props {
   scale?: number;
 }
 
-// Number to words (Indian) - simple version
-function numToWords(n: number): string {
-  const a = [
-    "",
-    "One",
-    "Two",
-    "Three",
-    "Four",
-    "Five",
-    "Six",
-    "Seven",
-    "Eight",
-    "Nine",
-    "Ten",
-    "Eleven",
-    "Twelve",
-    "Thirteen",
-    "Fourteen",
-    "Fifteen",
-    "Sixteen",
-    "Seventeen",
-    "Eighteen",
-    "Nineteen",
-  ];
-  const b = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
-  const inWords = (num: number): string => {
-    if (num < 20) return a[num];
-    if (num < 100) return b[Math.floor(num / 10)] + (num % 10 ? " " + a[num % 10] : "");
-    if (num < 1000)
-      return a[Math.floor(num / 100)] + " Hundred" + (num % 100 ? " " + inWords(num % 100) : "");
-    if (num < 100000)
-      return (
-        inWords(Math.floor(num / 1000)) +
-        " Thousand" +
-        (num % 1000 ? " " + inWords(num % 1000) : "")
-      );
-    if (num < 10000000)
-      return (
-        inWords(Math.floor(num / 100000)) +
-        " Lakh" +
-        (num % 100000 ? " " + inWords(num % 100000) : "")
-      );
-    return (
-      inWords(Math.floor(num / 10000000)) +
-      " Crore" +
-      (num % 10000000 ? " " + inWords(num % 10000000) : "")
-    );
-  };
-  const rupees = Math.floor(n);
-  const paise = Math.round((n - rupees) * 100);
-  let s = inWords(rupees) + " Rupees";
-  if (paise) s += " and " + inWords(paise) + " Paise";
-  return s + " Only";
-}
-
 export function PrintableInvoice({
   inv,
   company,
@@ -101,27 +47,14 @@ export function PrintableInvoice({
   const isSale = mode === "sale";
   const title = gstOn ? "TAX INVOICE" : isSale ? "INVOICE / BILL OF SUPPLY" : "PURCHASE BILL";
 
-  // Aggregate GST by rate for summary
-  const gstBuckets: Record<string, { taxable: number; tax: number }> = {};
-  let taxableTotal = 0;
-  // Sum of the printed "Amount" column (taxable + GST per line) — must match
-  // the line-items table footer exactly, since that footer is not the same
-  // figure as the Grand Total below (which also applies Extra Discount/Round Off).
-  let lineAmountTotal = 0;
-  inv.lineItems.forEach((l) => {
-    const taxable = l.qty * l.price * (1 - l.discountPct / 100);
-    taxableTotal += taxable;
-    const gstAmt = gstOn ? taxable * (l.gstRate / 100) : 0;
-    lineAmountTotal += taxable + gstAmt;
-    if (gstOn) {
-      const key = l.gstRate.toString();
-      if (!gstBuckets[key]) gstBuckets[key] = { taxable: 0, tax: 0 };
-      gstBuckets[key].taxable += taxable;
-      gstBuckets[key].tax += taxable * (l.gstRate / 100);
-    }
-  });
-
-  const totalQty = inv.lineItems.reduce((s, l) => s + l.qty, 0);
+  // Shared with the 6x4 sheet, so the same bill printed on two paper sizes
+  // can never show two different taxable values — see lib/invoicePrint.
+  //
+  // `lineAmountTotal` is the sum of the printed "Amount" column (taxable +
+  // GST per line) and must match the line-items table footer exactly, since
+  // that footer is NOT the same figure as the Grand Total below (which also
+  // applies Extra Discount/Round Off).
+  const { gstBuckets, taxableTotal, lineAmountTotal, totalQty } = invoicePrintTotals(inv);
 
   // Every font-size / padding / column-width number below goes through this,
   // so `scale` genuinely shrinks the rendered layout instead of just the
@@ -276,7 +209,7 @@ export function PrintableInvoice({
               <div style={{ fontSize: s(10), fontWeight: 700, marginBottom: s(4) }}>
                 Amount in Words
               </div>
-              <div style={{ fontSize: s(11), fontStyle: "italic" }}>{numToWords(inv.total)}</div>
+              <div style={{ fontSize: s(11), fontStyle: "italic" }}>{amountInWords(inv.total)}</div>
               {inv.notes && (
                 <>
                   <div

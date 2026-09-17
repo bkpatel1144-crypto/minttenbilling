@@ -53,7 +53,8 @@ import {
   Loader2,
   AlertTriangle,
 } from "lucide-react";
-import { PrintableInvoice } from "@/components/PrintableInvoice";
+import { InvoicePrintCopy } from "@/components/InvoicePrintCopy";
+import { printWithName, isStandalone } from "@/lib/print";
 import { NumInput, NumField } from "@/components/NumInput";
 import { ModePills } from "@/components/ModePills";
 import { QuickAddPartyDialog, type QuickAddPartyDetails } from "@/components/QuickAddPartyDialog";
@@ -242,6 +243,41 @@ export function InvoiceForm({ mode, existing }: Props) {
   }, [_repoV]);
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
+  /**
+   * The just-saved bill, while it is being printed.
+   *
+   * Save & Print used to hand off to the bill's own page with `?print=1`,
+   * which meant the counter watched the app leave the form, load another
+   * screen and only then raise the dialog — and on an installed app it left
+   * the page behind entirely. The form already keeps a hidden print copy of
+   * the bill mounted (further down), so the whole trip is unnecessary: put
+   * the SAVED document into that copy, print it here, and go to the list
+   * once the dialog closes.
+   *
+   * It has to be the saved document rather than the form's own `inv`,
+   * because the two are not the same at this moment — the bill number and
+   * any rounding are settled during the save.
+   */
+  const [printDoc, setPrintDoc] = useState<Invoice | null>(null);
+
+  // Print once the saved bill has actually been painted into the hidden
+  // copy — printing in the same tick would send the printer the previous
+  // render. One frame, then a short beat for the print stylesheet to settle,
+  // is what makes this reliable rather than usually-right.
+  useEffect(() => {
+    if (!printDoc) return;
+    let cancelled = false;
+    const t = setTimeout(() => {
+      if (cancelled) return;
+      printWithName(printDoc.number, () => navigate({ to: isSale ? "/sales" : "/purchase" }));
+    }, 120);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [printDoc]);
+
   const bankSelectRef = useRef<HTMLInputElement>(null);
   /**
    * Has anyone actually picked a payment mode on this bill?
@@ -894,11 +930,21 @@ export function InvoiceForm({ mode, existing }: Props) {
     }
     commitBatch(batch, `save ${isSale ? "sale" : "purchase"}`);
     if (andPrint) {
-      navigate({
-        to: isSale ? "/sales/$id" : "/purchase/$id",
-        params: { id: savedId },
-        search: { print: 1 },
-      });
+      // Installed home-screen app: WebKit gives a standalone PWA no print
+      // dialog at all, so window.print() here would be a silent no-op and
+      // the bill would never come out. That case still routes to the bill
+      // page, whose PDF fallback is the only thing that can produce a copy
+      // there.
+      if (isStandalone()) {
+        navigate({
+          to: isSale ? "/sales/$id" : "/purchase/$id",
+          params: { id: savedId },
+          search: { print: 1 },
+        });
+      } else {
+        // Everywhere else the bill prints from right here — see printDoc.
+        setPrintDoc({ ...finalInv, id: savedId });
+      }
     } else {
       navigate({ to: isSale ? "/sales" : "/purchase" });
     }
@@ -1847,7 +1893,22 @@ export function InvoiceForm({ mode, existing }: Props) {
           {saving ? "Saving…" : "Save"}
         </Button>
       </div>
-      <PrintableInvoice inv={inv} company={company} mode={mode} />
+      {/* The hidden print copy — what Ctrl+P and Save & Print actually put
+          on paper. It follows the shop's default format from Settings, so
+          a shop set to 80mm gets 80mm from the form too; before this it
+          always printed A4 no matter what the bill page was showing.
+          `printDoc` is the saved bill during a Save & Print, and the live
+          form otherwise. */}
+      <InvoicePrintCopy
+        inv={printDoc ?? inv}
+        company={company}
+        mode={mode}
+        // Sale bills follow the shop's chosen paper; purchase bills stay on
+        // A4, which is the only size the purchase bill page itself offers —
+        // printing a purchase on label stock here would not match what that
+        // page prints for the same document.
+        format={isSale ? (company.printFormat ?? "a4") : "a4"}
+      />
       <QuickAddPartyDialog
         draft={quickAddParty}
         isSale={isSale}

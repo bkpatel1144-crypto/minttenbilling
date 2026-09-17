@@ -4535,6 +4535,67 @@ async function runAll(): Promise<Results> {
   bulkRoot.unmount();
   bulkHost.remove();
 
+  /* ── The bill form's print copy stays off screen, in every paper size ──
+     The form keeps a hidden copy of the bill mounted — that copy is what
+     Ctrl+P and Save & Print actually put on paper, and it now follows the
+     shop's chosen format instead of always being A4.
+
+     The failure this guards against is specific and ugly: the thermal
+     receipt hard-coded the `print-visible` class (shown on screen AND
+     printed), which is right on the bill's own page and wrong here. Mounted
+     that way in the form, a shop set to 80mm would find a receipt rendered
+     down the middle of its data-entry screen. Each format is mounted and
+     checked for real rather than trusted. */
+  {
+    const company = CompanyRepo.get();
+    for (const fmt of ["a4", "a4-2up", "6x4", "thermal80", "thermal58"] as const) {
+      CompanyRepo.save({ ...company, printFormat: fmt } as never);
+      await renderRoute("/sales/new");
+
+      const copy = document.querySelector<HTMLElement>(".print-area");
+      assert(!!copy, `print copy (${fmt}): the form mounts a hidden printable copy`);
+      if (copy) {
+        // display:none via the .print-area rule — no box at all on screen.
+        const box = copy.getBoundingClientRect();
+        assert(
+          getComputedStyle(copy).display === "none" && box.width === 0 && box.height === 0,
+          `print copy (${fmt}): it must not be visible on the entry screen — ` +
+            `display ${getComputedStyle(copy).display}, ${Math.round(box.width)}x${Math.round(box.height)}`,
+        );
+        // And nothing else on the page may be a print-visible sheet, which
+        // is the class that WOULD show.
+        assert(
+          !document.querySelector(".print-visible"),
+          `print copy (${fmt}): no sheet is mounted as print-visible on the form`,
+        );
+      }
+
+      // The copy is the right sheet for the format — a 6x4 or thermal sheet
+      // carries its own @page rule, which is the thing that makes the paper
+      // size happen at all.
+      const markup = copy?.outerHTML ?? "";
+      if (fmt === "6x4") {
+        assert(
+          /size:\s*6in 4in/.test(markup),
+          "print copy (6x4): the sheet asks the printer for 6in x 4in paper",
+        );
+      }
+      if (fmt === "thermal80") {
+        assert(
+          /size:\s*80mm/.test(markup),
+          "print copy (thermal80): the sheet asks for an 80mm roll",
+        );
+      }
+      if (fmt === "a4-2up") {
+        assert(
+          /size:\s*A4 landscape/.test(markup),
+          "print copy (2 copies): the sheet asks for landscape A4",
+        );
+      }
+    }
+    CompanyRepo.save(company as never);
+  }
+
   if (root) root.unmount();
   if (host) host.remove();
   return R;

@@ -24,6 +24,7 @@ export function useShareablePdf(itemLabel: string) {
     filename: string,
     orientation?: "portrait" | "landscape",
     pageWidthMm?: number,
+    opts?: { pageHeightMm?: number },
   ) => {
     if (shareReady) {
       const file = shareReady;
@@ -36,7 +37,7 @@ export function useShareablePdf(itemLabel: string) {
       }
       return;
     }
-    const file = await prepareShareFile(el, filename, orientation, pageWidthMm);
+    const file = await prepareShareFile(el, filename, orientation, pageWidthMm, opts);
     if (!canShareFile(file)) {
       downloadFile(file);
       toast.info("Sharing isn't supported here — PDF downloaded instead");

@@ -6,6 +6,10 @@ export interface PdfOptions {
    * stylesheet — skips uploading ~108 KB of CSS per render. Only safe for
    * markup with no `className` at all (see PrintablePartyStatement). */
   selfContained?: boolean;
+  /** Fixed sheet height in mm, paired with pageWidthMm — for stock with a
+   * real bottom edge (the 6x4 label). Without it a sized render measures
+   * the content instead, which is what a receipt roll wants. */
+  pageHeightMm?: number;
 }
 
 /** The render server fns are auth-gated (they'd otherwise be an open
@@ -74,6 +78,7 @@ async function elementToPdfBlob(
       html: buildPrintableHtml(el, !opts?.selfContained),
       landscape: orientation === "landscape",
       pageWidthMm,
+      pageHeightMm: opts?.pageHeightMm,
     },
   });
   return res.blob();
@@ -125,9 +130,10 @@ export async function prepareShareFile(
   filename: string,
   orientation?: "portrait" | "landscape",
   pageWidthMm?: number,
+  opts?: PdfOptions,
 ): Promise<File> {
   const name = pdfFilename(filename);
-  const blob = await elementToPdfBlob(el, orientation, pageWidthMm);
+  const blob = await elementToPdfBlob(el, orientation, pageWidthMm, opts);
   return new File([blob], name, { type: "application/pdf" });
 }
 

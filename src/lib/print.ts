@@ -11,22 +11,45 @@ let originalTitle: string | undefined;
  * chooses "Save as PDF", the browser suggests this as the filename
  * (e.g. INV-0042.pdf instead of the app name).
  */
-export function printWithName(name: string) {
+export function printWithName(name: string, onDone?: () => void) {
   if (originalTitle === undefined) originalTitle = document.title;
   document.title = name;
   // restore() has to be able to cancel the fallback timer, but the timer
   // can't exist until restore() does — so the handle lives on a small box
   // both can close over.
-  const fallback: { timer?: ReturnType<typeof setTimeout> } = {};
-  const restore = () => {
+  const fallback: { title?: ReturnType<typeof setTimeout>; done?: ReturnType<typeof setTimeout> } =
+    {};
+  let finished = false;
+  const restoreTitle = () => {
     document.title = originalTitle!;
-    window.removeEventListener("afterprint", restore);
-    clearTimeout(fallback.timer);
   };
-  window.addEventListener("afterprint", restore);
+  /**
+   * `onDone` is what lets a caller navigate away — but only once the dialog
+   * is actually closed. Leaving the page while it is still open takes the
+   * content being printed out of the DOM with it, which is why Save & Print
+   * waits for this rather than navigating straight after window.print().
+   *
+   * Deliberately NOT tied to the 3s title-restore fallback below: a print
+   * dialog sits open for as long as the person needs, and a caller that
+   * navigates three seconds in would do exactly the damage this exists to
+   * avoid. The long timer is only so a browser that never fires afterprint
+   * at all can't strand the caller waiting forever.
+   */
+  const finish = () => {
+    if (finished) return;
+    finished = true;
+    restoreTitle();
+    window.removeEventListener("afterprint", finish);
+    clearTimeout(fallback.title);
+    clearTimeout(fallback.done);
+    onDone?.();
+  };
+  window.addEventListener("afterprint", finish);
   window.print();
-  // Fallback for browsers that don't fire afterprint reliably
-  fallback.timer = setTimeout(restore, 3000);
+  // Fallback for browsers that don't fire afterprint reliably. The title is
+  // cosmetic, so restoring it early is harmless even mid-dialog.
+  fallback.title = setTimeout(restoreTitle, 3000);
+  if (onDone) fallback.done = setTimeout(finish, 60_000);
 }
 
 /** True when running as an installed/home-screen app rather than a normal

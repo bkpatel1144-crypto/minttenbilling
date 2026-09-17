@@ -19,10 +19,15 @@ export function ThermalReceipt({
   inv,
   company,
   width,
+  className = "print-visible",
 }: {
   inv: Invoice;
   company: Company;
   width: 80 | 58;
+  /** "print-area" mounts it hidden until printed — what the create/edit
+   * form needs for its Save & Print copy. Detail pages, which also show the
+   * receipt on screen, keep the default. */
+  className?: string;
 }) {
   const gstOn = inv.gstEnabled !== false;
   const paperMm = width === 80 ? 72 : 48; // printable width inside the roll
@@ -47,7 +52,7 @@ export function ThermalReceipt({
   );
 
   return (
-    <div className="print-visible thermal-receipt" style={base}>
+    <div className={`${className} thermal-receipt`} style={base}>
       {/* !important on both descriptors: src/styles.css sets a global
           @page { size: A4 } default for every other printable page, and
           without !important that can win the cascade over this dynamic
@@ -67,7 +72,7 @@ export function ThermalReceipt({
           instead splits that leftover evenly on both sides. */}
       <style>{`@media print {
         @page { size: ${width}mm auto !important; margin: 3mm !important; }
-        .thermal-receipt.print-visible {
+        .thermal-receipt.print-visible, .thermal-receipt.print-area {
           padding: 3mm !important;
           left: ${sideMarginMm}mm !important;
           right: ${sideMarginMm}mm !important;
