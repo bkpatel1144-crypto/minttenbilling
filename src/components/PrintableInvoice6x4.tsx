@@ -18,6 +18,38 @@ const MARGIN_MM = 4;
 const MARGIN_PX = Math.round((MARGIN_MM * 96) / 25.4);
 
 /**
+ * The type scale, in the 96dpi px the browser lays print out in — divide by
+ * 1.333 for the point size that actually lands on the paper.
+ *
+ * This sheet's first version was set at 6.5-7.5px, which is 5pt, and the
+ * shop's own printout came back unreadable. A 6x4 label goes to a thermal or
+ * label printer around 203dpi with no anti-aliasing and no greys, and
+ * anything under about 8pt turns to mush on that hardware. So nothing here
+ * that a person has to READ goes below 10.5px (~8pt), and the figures that
+ * decide whether the bill is right — party, total, balance — are well above
+ * it. Fewer item lines fit per label as a result; that is the correct trade,
+ * and a longer bill simply runs onto a second label.
+ *
+ * If this ever needs to be tightened again, shrink the layout (drop a
+ * column, tighten padding) rather than the type.
+ */
+const FONT = {
+  /** 13.5pt */ shopName: 18,
+  /** 7.9pt — address, phone, GSTIN */ shopMeta: 10.5,
+  /** 8.3pt */ docTitle: 11,
+  /** 9pt */ docNumber: 12,
+  /** 7.9pt */ docDate: 10.5,
+  /** 7.1pt — the small "BILL TO" caption, not data */ caption: 9.5,
+  /** 10.5pt */ partyName: 14,
+  /** 7.9pt */ partyMeta: 10.5,
+  /** 7.9pt */ tableHead: 10.5,
+  /** 8.3pt — every figure in the item table */ cell: 11,
+  /** 11.3pt */ grandTotal: 15,
+  /** 7.5pt */ words: 10,
+  /** 7.5pt */ footMeta: 10,
+} as const;
+
+/**
  * The bill on a 6x4 inch sheet — the size this shop's label printer is
  * loaded with.
  *
@@ -58,16 +90,21 @@ export function PrintableInvoice6x4({
     .sort((a, b) => a - b);
 
   const cell: React.CSSProperties = {
-    border: "0.5px solid #000",
-    padding: "1.5px 3px",
-    fontSize: 7.5,
-    lineHeight: 1.25,
+    // 1px, not a hairline: these sheets go to label/thermal printers at
+    // ~203dpi, which cannot resolve a sub-pixel rule and drop it to a broken
+    // grey dotted line.
+    border: "1px solid #000",
+    padding: "1.5px 4px",
+    fontSize: FONT.cell,
+    lineHeight: 1.2,
   };
   const th: React.CSSProperties = {
     ...cell,
-    background: "#eee",
+    // No grey fill anywhere on this sheet. A label printer has no greys —
+    // it dithers them into a speckle that muddies the text sitting on top.
+    // Weight and rules do the same job and stay crisp.
     fontWeight: 700,
-    fontSize: 6.8,
+    fontSize: FONT.tableHead,
     textAlign: "left",
   };
   /** One line of the totals stack. */
@@ -77,11 +114,10 @@ export function PrintableInvoice6x4({
         display: "flex",
         justifyContent: "space-between",
         gap: 8,
-        fontSize: strong ? 9 : 7.5,
+        fontSize: strong ? FONT.grandTotal : FONT.cell,
         fontWeight: strong ? 800 : 400,
-        padding: strong ? "2px 3px" : "0.5px 3px",
-        background: strong ? "#eee" : undefined,
-        borderTop: strong ? "1px solid #000" : undefined,
+        padding: strong ? "3px 4px" : "1.5px 4px",
+        borderTop: strong ? "2px solid #000" : undefined,
       }}
     >
       <span>{label}</span>
@@ -138,25 +174,25 @@ export function PrintableInvoice6x4({
           }}
         >
           <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 14, fontWeight: 800, lineHeight: 1.1 }}>
+            <div style={{ fontSize: FONT.shopName, fontWeight: 800, lineHeight: 1.1 }}>
               {company.name || "Your Company"}
             </div>
-            {company.address && <div style={{ fontSize: 6.8 }}>{company.address}</div>}
-            <div style={{ fontSize: 6.8 }}>
+            {company.address && <div style={{ fontSize: FONT.shopMeta }}>{company.address}</div>}
+            <div style={{ fontSize: FONT.shopMeta }}>
               {company.phone && <>Ph: {company.phone}</>}
               {company.phone && company.email && " · "}
               {company.email}
             </div>
             {gstOn && company.gstin && (
-              <div style={{ fontSize: 6.8, fontWeight: 700 }}>GSTIN: {company.gstin}</div>
+              <div style={{ fontSize: FONT.shopMeta, fontWeight: 700 }}>GSTIN: {company.gstin}</div>
             )}
           </div>
           <div style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-            <div style={{ fontSize: 8, fontWeight: 800, letterSpacing: 0.6 }}>
+            <div style={{ fontSize: FONT.docTitle, fontWeight: 800, letterSpacing: 0.6 }}>
               {gstOn ? "TAX INVOICE" : isSale ? "INVOICE" : "PURCHASE BILL"}
             </div>
-            <div style={{ fontSize: 7.5, fontWeight: 700 }}>{inv.number}</div>
-            <div style={{ fontSize: 7 }}>{fmtDateShort(inv.date)}</div>
+            <div style={{ fontSize: FONT.docNumber, fontWeight: 700 }}>{inv.number}</div>
+            <div style={{ fontSize: FONT.docDate }}>{fmtDateShort(inv.date)}</div>
           </div>
         </div>
 
@@ -168,17 +204,21 @@ export function PrintableInvoice6x4({
             alignItems: "flex-start",
             gap: 10,
             padding: "3px 0",
-            borderBottom: "0.5px solid #000",
+            borderBottom: "1px solid #000",
           }}
         >
           <div style={{ minWidth: 0 }}>
-            <span style={{ fontSize: 6.5, fontWeight: 700, color: "#444" }}>
+            <span style={{ fontSize: FONT.caption, fontWeight: 700 }}>
               {isSale ? "BILL TO " : "SUPPLIER "}
             </span>
-            <span style={{ fontSize: 9.5, fontWeight: 700 }}>{inv.partyName || "—"}</span>
-            {inv.partyPhone && <span style={{ fontSize: 7 }}> · {inv.partyPhone}</span>}
+            <span style={{ fontSize: FONT.partyName, fontWeight: 700 }}>
+              {inv.partyName || "—"}
+            </span>
+            {inv.partyPhone && (
+              <span style={{ fontSize: FONT.partyMeta }}> · {inv.partyPhone}</span>
+            )}
           </div>
-          <div style={{ fontSize: 7, textAlign: "right", whiteSpace: "nowrap" }}>
+          <div style={{ fontSize: FONT.partyMeta, textAlign: "right", whiteSpace: "nowrap" }}>
             {describePayment(inv, bankName)}
           </div>
         </div>
@@ -187,12 +227,15 @@ export function PrintableInvoice6x4({
         <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 3 }}>
           <thead>
             <tr>
-              <th style={{ ...th, width: 16, textAlign: "center" }}>#</th>
+              <th style={{ ...th, width: 20, textAlign: "center" }}>#</th>
               <th style={th}>Item</th>
-              <th style={{ ...th, width: 34, textAlign: "right" }}>Qty</th>
-              <th style={{ ...th, width: 52, textAlign: "right" }}>Price</th>
-              {gstOn && <th style={{ ...th, width: 30, textAlign: "right" }}>GST%</th>}
-              <th style={{ ...th, width: 62, textAlign: "right" }}>Amount</th>
+              {/* Wide enough for "12 pcs" on ONE line. Wrapping the unit under
+                  the number cost ten pixels a row, which is what pushed the
+                  balance off the bottom of the label. */}
+              <th style={{ ...th, width: 58, textAlign: "right" }}>Qty</th>
+              <th style={{ ...th, width: 70, textAlign: "right" }}>Price</th>
+              {gstOn && <th style={{ ...th, width: 38, textAlign: "right" }}>GST%</th>}
+              <th style={{ ...th, width: 84, textAlign: "right" }}>Amount</th>
             </tr>
           </thead>
           <tbody>
@@ -205,16 +248,20 @@ export function PrintableInvoice6x4({
                   <td style={cell}>
                     {l.name}
                     {l.discountPct > 0 && (
-                      <span style={{ fontSize: 6.5, color: "#444" }}> (-{l.discountPct}%)</span>
+                      <span style={{ fontSize: FONT.caption }}> (-{l.discountPct}%)</span>
                     )}
                   </td>
-                  <td style={{ ...cell, textAlign: "right" }}>
+                  <td style={{ ...cell, textAlign: "right", whiteSpace: "nowrap" }}>
                     {l.qty}
                     {l.unit ? ` ${l.unit}` : ""}
                   </td>
-                  <td style={{ ...cell, textAlign: "right" }}>{fmtMoney(l.price)}</td>
+                  <td style={{ ...cell, textAlign: "right", whiteSpace: "nowrap" }}>
+                    {fmtMoney(l.price)}
+                  </td>
                   {gstOn && <td style={{ ...cell, textAlign: "right" }}>{l.gstRate}%</td>}
-                  <td style={{ ...cell, textAlign: "right" }}>{fmtMoney(taxable + gstAmt)}</td>
+                  <td style={{ ...cell, textAlign: "right", whiteSpace: "nowrap" }}>
+                    {fmtMoney(taxable + gstAmt)}
+                  </td>
                 </tr>
               );
             })}
@@ -236,23 +283,21 @@ export function PrintableInvoice6x4({
           }}
         >
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 6.5, fontStyle: "italic", lineHeight: 1.3 }}>
+            <div style={{ fontSize: FONT.words, fontStyle: "italic", lineHeight: 1.3 }}>
               {amountInWords(inv.total)}
             </div>
-            <div style={{ fontSize: 6.8, marginTop: 3 }}>
+            <div style={{ fontSize: FONT.footMeta, marginTop: 3 }}>
               Items {inv.lineItems.length} · Qty {r2(totalQty)}
               {gstOn && rates.length > 0 && <> · GST {rates.map((r) => `${r}%`).join(", ")}</>}
             </div>
-            <div style={{ marginTop: 14, fontSize: 6.8, textAlign: "right" }}>
-              <div
-                style={{ borderTop: "0.5px solid #000", display: "inline-block", paddingTop: 1 }}
-              >
+            <div style={{ marginTop: 10, fontSize: FONT.footMeta, textAlign: "right" }}>
+              <div style={{ borderTop: "1px solid #000", display: "inline-block", paddingTop: 2 }}>
                 For {company.name || "Company"}
               </div>
             </div>
           </div>
 
-          <div style={{ width: 168, border: "0.5px solid #000" }}>
+          <div style={{ width: 196, border: "1px solid #000" }}>
             {tot(gstOn ? "Taxable" : "Subtotal", fmtMoney(taxableTotal))}
             {inv.discount > 0 && tot("Discount", `- ${fmtMoney(inv.discount)}`)}
             {gstOn && tot("GST", fmtMoney(gstTotal))}

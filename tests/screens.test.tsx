@@ -4579,6 +4579,56 @@ async function runAll(): Promise<Results> {
           /size:\s*6in 4in/.test(markup),
           "print copy (6x4): the sheet asks the printer for 6in x 4in paper",
         );
+
+        /* Nothing on this sheet may be set too small to read.
+           The first version of the 6x4 layout was typeset at 6.5-7.5px —
+           about 5pt — and the shop's own printout came back with, in their
+           words, nothing visible. A 6x4 label goes to a thermal/label
+           printer around 203dpi with no anti-aliasing, where anything under
+           roughly 8pt turns to mush. Browsers compute font sizes on
+           display:none elements, so this measures the real values.
+           7.1pt (9.5px) is the floor, and only the "BILL TO" caption sits
+           there; the figures are 8.3pt and up. */
+        const MIN_PX = 9.5;
+        let smallest = Infinity;
+        let offender = "";
+        for (const el of Array.from(copy?.querySelectorAll<HTMLElement>("*") ?? [])) {
+          // Only elements holding their own text — a wrapper's font-size is
+          // inherited and never actually painted.
+          const hasText = Array.from(el.childNodes).some(
+            (n) => n.nodeType === 3 && (n.textContent ?? "").trim(),
+          );
+          if (!hasText) continue;
+          const px = parseFloat(getComputedStyle(el).fontSize);
+          if (px < smallest) {
+            smallest = px;
+            offender = (el.textContent ?? "").trim().slice(0, 24);
+          }
+        }
+        assert(
+          smallest >= MIN_PX,
+          `print copy (6x4): every line must be readable on a label printer — ` +
+            `smallest is ${smallest}px (${(smallest * 0.75).toFixed(1)}pt) on "${offender}", ` +
+            `floor is ${MIN_PX}px`,
+        );
+
+        // And the item table specifically — the part a customer checks. A
+        // blank new bill has no rows yet, so the header is what is always
+        // there to measure; the rows are checked too when there are any.
+        const head = copy?.querySelector<HTMLElement>("thead th");
+        const headPx = head ? parseFloat(getComputedStyle(head).fontSize) : 0;
+        assert(
+          headPx >= 10.5,
+          `print copy (6x4): the item table header is at least 10.5px (7.9pt) — got ${headPx}px`,
+        );
+        const firstCell = copy?.querySelector<HTMLElement>("tbody td");
+        if (firstCell) {
+          const cellPx = parseFloat(getComputedStyle(firstCell).fontSize);
+          assert(
+            cellPx >= 11,
+            `print copy (6x4): the item rows are at least 11px (8.3pt) — got ${cellPx}px`,
+          );
+        }
       }
       if (fmt === "thermal80") {
         assert(
