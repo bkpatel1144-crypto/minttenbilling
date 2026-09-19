@@ -12,10 +12,28 @@ const r2 = (n: number) => Math.round(n * 100) / 100;
  * the printer gets rather than a guess. */
 export const SHEET_6X4_W = 576;
 export const SHEET_6X4_H = 384;
-/** Physical page margin, matched by the @page rule below, in mm and in the
- * 96dpi pixels the on-screen sheet is laid out in. */
-const MARGIN_MM = 4;
-const MARGIN_PX = Math.round((MARGIN_MM * 96) / 25.4);
+/**
+ * Physical page margins, matched by the @page rule below — in mm, and in the
+ * 96dpi pixels the on-screen sheet is laid out in.
+ *
+ * The sides are twice the top and bottom on purpose. These labels are cut
+ * off the roll by hand at the counter, and at an even 4mm gutter the cut was
+ * going straight through the party name and the amounts. 8mm gives the
+ * scissors somewhere to land that costs nothing but the width of the item
+ * column, which had room to spare.
+ *
+ * Vertical stays at 4mm: height is the tight dimension on a 4in label, and
+ * the cut is across the roll, not along it.
+ */
+const MARGIN_MM_V = 4;
+const MARGIN_MM_H = 8;
+const mmToPx = (mm: number) => Math.round((mm * 96) / 25.4);
+const MARGIN_PX_V = mmToPx(MARGIN_MM_V);
+const MARGIN_PX_H = mmToPx(MARGIN_MM_H);
+
+/** Padding for an on-screen preview of this sheet, so the preview shows the
+ * same gutters the printer leaves rather than a hardcoded guess. */
+export const SHEET_6X4_PADDING = `${MARGIN_PX_V}px ${MARGIN_PX_H}px`;
 
 /**
  * The type scale, in the 96dpi px the browser lays print out in — divide by
@@ -144,7 +162,7 @@ export function PrintableInvoice6x4({
           comes from @page instead and the padding is forced off (two classes
           beat one, so this wins without needing to fight specificity). */}
       <style>{`@media print {
-        @page { size: 6in 4in !important; margin: ${MARGIN_MM}mm !important; }
+        @page { size: 6in 4in !important; margin: ${MARGIN_MM_V}mm ${MARGIN_MM_H}mm !important; }
         .invoice-6x4.print-area, .invoice-6x4.print-visible {
           padding: 0 !important;
           width: 100% !important;
@@ -159,7 +177,7 @@ export function PrintableInvoice6x4({
         style={{
           display: "flex",
           flexDirection: "column",
-          minHeight: SHEET_6X4_H - MARGIN_PX * 2,
+          minHeight: SHEET_6X4_H - MARGIN_PX_V * 2,
         }}
       >
         {/* Header: shop on the left, document identity on the right */}

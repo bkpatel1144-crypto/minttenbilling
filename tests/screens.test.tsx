@@ -4580,6 +4580,25 @@ async function runAll(): Promise<Results> {
           "print copy (6x4): the sheet asks the printer for 6in x 4in paper",
         );
 
+        /* A cutting gutter down both sides. These labels are cut off the
+           roll by hand, and at the original even 4mm margin the scissors
+           went through the party name and the amounts. The sides must stay
+           at least twice the top/bottom. */
+        const margin = /margin:\s*([\d.]+)mm\s+([\d.]+)mm/.exec(markup);
+        assert(!!margin, `print copy (6x4): the sheet sets its own page margins — ${margin}`);
+        if (margin) {
+          const [, vertical, horizontal] = margin.map(Number);
+          assert(
+            horizontal >= 8,
+            `print copy (6x4): at least 8mm clear at each side to cut into — got ${horizontal}mm`,
+          );
+          assert(
+            horizontal >= vertical * 2,
+            `print copy (6x4): the side gutters stay wider than the top/bottom — ` +
+              `${horizontal}mm vs ${vertical}mm`,
+          );
+        }
+
         /* Nothing on this sheet may be set too small to read.
            The first version of the 6x4 layout was typeset at 6.5-7.5px —
            about 5pt — and the shop's own printout came back with, in their

@@ -13,7 +13,12 @@ import { PRINT_FORMATS, sheetSizeMm, isLandscape } from "@/lib/printFormats";
 import { fmtMode } from "@/lib/paymentMode";
 import { ThermalReceipt } from "@/components/ThermalReceipt";
 import { PrintableInvoice } from "@/components/PrintableInvoice";
-import { PrintableInvoice6x4, SHEET_6X4_W, SHEET_6X4_H } from "@/components/PrintableInvoice6x4";
+import {
+  PrintableInvoice6x4,
+  SHEET_6X4_W,
+  SHEET_6X4_H,
+  SHEET_6X4_PADDING,
+} from "@/components/PrintableInvoice6x4";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useRepoData } from "@/hooks/useRepoData";
 import { toast } from "sonner";
@@ -275,9 +280,10 @@ function InvoiceDetailPage() {
               style={{
                 width: SHEET_6X4_W,
                 minHeight: SHEET_6X4_H,
-                // 4mm at 96dpi — the same margin the sheet's own @page rule
-                // gives the printer, so what is on screen is the real sheet.
-                padding: 15,
+                // The same gutters the sheet.s own @page rule gives the printer,
+                // so what is on screen is the real sheet — wider at the sides,
+                // which is where the label gets cut by hand.
+                padding: SHEET_6X4_PADDING,
                 transform: `scale(${previewScale})`,
                 transformOrigin: "top left",
               }}
